@@ -1,0 +1,30 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Wetfiles which are too big for GitHub
+*.wet
+
+# Mac hidden files
+.DS_Store
+
+# Folders
+
+# exclude everything
+data/*
+fastText/*
+classified/*
+
+# exception to the rule
+!data/.gitkeep
+!fastText/.gitkeep
+!classified/.gitkeep
