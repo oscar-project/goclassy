@@ -64,12 +64,12 @@ func main() {
 	defer file.Close()
 
 	waiter := make(chan struct{})
-	lines := make(chan pair, 10)
+	lines := make(chan pair, 40)
 
 	go clasifyFiles(waiter, lines)
 
 	var wg sync.WaitGroup
-	maxGoroutines := 10
+	maxGoroutines := 40
 	guard := make(chan struct{}, maxGoroutines)
 	for path := range paths {
 		wg.Add(1)
