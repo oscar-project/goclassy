@@ -17,6 +17,8 @@ import (
 	"unicode/utf8"
 )
 
+const langsFastText = "af als am an ar arz as ast av az azb ba bar bcl be bg bh bn bo bpy br bs bxr ca cbk ce ceb ckb co cs cv cy da de diq dsb dty dv el eml en eo es et eu fa fi fr frr fy ga gd gl gn gom gu gv he hi hif hr hsb ht hu hy ia id ie ilo io is it ja jbo jv ka kk km kn ko krc ku kv kw ky la lb lez li lmo lo lrc lt lv mai mg mhr min mk ml mn mr mrj ms mt mwl my myv mzn nah nap nds ne new nl nn no oc or os pa pam pfl pl pms pnb ps pt qu rm ro ru rue sa sah sc scn sco sd sh si sk sl so sq sr su sv sw ta te tg th tk tl tr tt tyv ug uk ur uz vec vep vi vls vo wa war wuu xal xmf yi yo yue zh"
+
 type warcRecord struct {
 	header string
 	body   []byte
@@ -24,7 +26,18 @@ type warcRecord struct {
 
 type pair struct {
 	text string
-	lang string
+	tags string
+}
+
+type langFile struct {
+	mux    sync.Mutex
+	Writer *bufio.Writer
+}
+
+func (lf *langFile) WriteString(s string) (n int, err error) {
+	lf.mux.Lock()
+	defer lf.mux.Unlock()
+	return lf.Writer.WriteString(s)
 }
 
 func walkFiles(done <-chan struct{}, root string) (<-chan string, <-chan error) {
@@ -57,25 +70,20 @@ func main() {
 	defer close(done)
 
 	paths, errc := walkFiles(done, "data/")
-	file, err := os.Open("data/wetfile_1.wet")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
 
 	waiter := make(chan struct{})
-	lines := make(chan pair, 40)
+	files := make(chan pair, 100)
 
-	go clasifyFiles(waiter, lines)
+	go clasifyFiles(waiter, files)
 
 	var wg sync.WaitGroup
-	maxGoroutines := 40
+	maxGoroutines := 10
 	guard := make(chan struct{}, maxGoroutines)
 	for path := range paths {
 		wg.Add(1)
 		go func(path string) {
 			guard <- struct{}{}
-			clasifyLines(path, lines) // HLc
+			clasifyLines(path, files) // HLc
 			<-guard
 			wg.Done()
 		}(path)
@@ -86,7 +94,7 @@ func main() {
 		log.Fatal(err)
 	}
 	wg.Wait()
-	close(lines)
+	close(files)
 	<-waiter
 }
 
@@ -170,7 +178,7 @@ func readWarcRecord(in *bufio.Reader) (warcRecord, error) {
 	return warcRecord{warcHeaderBuilder.String(), body}, err
 }
 
-func clasifyLines(path string, lines chan<- pair) {
+func clasifyLines(path string, files chan<- pair) {
 	in, err := os.Open(path)
 	if err != nil {
 		fmt.Println(err)
@@ -200,8 +208,6 @@ func clasifyLines(path string, lines chan<- pair) {
 	}
 
 	cmd := exec.Command("fastText/fasttext", "predict-prob", "fastText/lid.176.bin", "-")
-
-	var label = regexp.MustCompile(`\_\_label\_\_([a-z]+)\s([0-9]*\.?[0-9]*)`)
 
 	stdin, err := cmd.StdinPipe()
 	cmd.Stdout = tags
@@ -233,72 +239,91 @@ func clasifyLines(path string, lines chan<- pair) {
 		log.Fatal(err)
 	}
 
-	tags, err = os.Open(tagFile.String())
-	if err != nil {
-		log.Fatal(err)
-	}
-	tagread := bufio.NewReader(tags)
+	files <- pair{cleanFile.String(), tagFile.String()}
+}
 
-	clean, err = os.Open(cleanFile.String())
-	if err != nil {
-		log.Fatal(err)
-	}
-	cleanread := bufio.NewReader(clean)
-
-	for par, err := cleanread.ReadString('\n'); err == nil; par, err = cleanread.ReadString('\n') {
-		tag, err := tagread.ReadString('\n')
+func clasifyFiles(waiter chan struct{}, files <-chan pair) {
+	m := make(map[string]*langFile)
+	scanner := bufio.NewScanner(strings.NewReader(langsFastText))
+	scanner.Split(bufio.ScanWords)
+	for scanner.Scan() {
+		var b strings.Builder
+		b.WriteString("classified/")
+		b.WriteString(scanner.Text())
+		b.WriteString(".txt")
+		aux, err := os.OpenFile(b.String(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		defer aux.Close()
 		if err != nil {
 			log.Fatal(err)
 		}
-		var prob float64
-		tagParts := label.FindStringSubmatch(tag)
-		lang := tagParts[1]
-		fmt.Sscan(tagParts[2], &prob)
-		if prob <= 0.8 {
-			continue
-		}
-		lines <- pair{par, lang}
+		m[scanner.Text()] = &langFile{Writer: bufio.NewWriter(aux)}
 	}
-	if err := tags.Close(); err != nil {
-		log.Fatal(err)
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "reading input:", err)
 	}
-	if err := clean.Close(); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := os.Remove(cleanFile.String()); err != nil {
-		log.Fatal(err)
-	}
-	if err := os.Remove(tagFile.String()); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func clasifyFiles(waiter chan struct{}, lines <-chan pair) {
-	m := make(map[string]*os.File)
-	var err error
-	for line := range lines {
-		if _, ok := m[line.lang]; !ok {
-			var b strings.Builder
-			b.WriteString("classified/")
-			b.WriteString(line.lang)
-			b.WriteString(".txt")
-			m[line.lang], err = os.OpenFile(b.String(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	var label = regexp.MustCompile(`\_\_label\_\_([a-z]+)\s([0-9]*\.?[0-9]*)`)
+	var wg sync.WaitGroup
+	var waitFile sync.WaitGroup
+	maxGoroutines := 5
+	guard := make(chan struct{}, maxGoroutines)
+	for file := range files {
+		wg.Add(1)
+		go func(file pair) {
+			guard <- struct{}{}
+			tags, err := os.Open(file.tags)
 			if err != nil {
 				log.Fatal(err)
 			}
-			if _, err := m[line.lang].WriteString(line.text); err != nil {
+			tagread := bufio.NewReader(tags)
+
+			clean, err := os.Open(file.text)
+			if err != nil {
 				log.Fatal(err)
 			}
-		} else {
-			if _, err := m[line.lang].WriteString(line.text); err != nil {
+			cleanread := bufio.NewReader(clean)
+			for par, err := cleanread.ReadString('\n'); err == nil; par, err = cleanread.ReadString('\n') {
+				tag, err := tagread.ReadString('\n')
+				if err != nil {
+					log.Fatal(err)
+				}
+				var prob float64
+				tagParts := label.FindStringSubmatch(tag)
+				lang := tagParts[1]
+				fmt.Sscan(tagParts[2], &prob)
+				if prob <= 0.8 {
+					continue
+				}
+				waitFile.Add(1)
+				go func(par, lang string) {
+					if _, err := m[lang].WriteString(par); err != nil {
+						log.Fatal(err)
+					}
+					waitFile.Done()
+				}(par, lang)
+			}
+
+			if err := tags.Close(); err != nil {
 				log.Fatal(err)
 			}
-		}
+			if err := clean.Close(); err != nil {
+				log.Fatal(err)
+			}
+
+			if err := os.Remove(file.text); err != nil {
+				log.Fatal(err)
+			}
+			if err := os.Remove(file.tags); err != nil {
+				log.Fatal(err)
+			}
+			<-guard
+			wg.Done()
+		}(file)
 	}
+	wg.Wait()
+	waitFile.Wait()
 
 	for lang := range m {
-		if err := m[lang].Close(); err != nil {
+		if err := m[lang].Writer.Flush(); err != nil {
 			log.Fatal(err)
 		}
 	}
