@@ -206,6 +206,7 @@ func clasifyLines(path string, files chan<- pair) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	cleanWriter := bufio.NewWriter(clean)
 
 	cmd := exec.Command("fastText/fasttext", "predict-prob", "fastText/lid.176.bin", "-")
 
@@ -219,12 +220,13 @@ func clasifyLines(path string, files chan<- pair) {
 			for line, err := buf.ReadString('\n'); err == nil; line, err = buf.ReadString('\n') {
 				if utf8.RuneCountInString(line) > 100 && utf8.Valid([]byte(line)) {
 					io.WriteString(stdin, line)
-					fmt.Fprint(clean, line)
+					cleanWriter.WriteString(line)
 				}
 			}
 			bufin.ReadBytes('\n')
 			bufin.ReadBytes('\n')
 		}
+		cleanWriter.Flush()
 	}()
 
 	err = cmd.Run()
