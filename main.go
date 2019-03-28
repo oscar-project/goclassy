@@ -69,7 +69,7 @@ func main() {
 	done := make(chan struct{})
 	defer close(done)
 
-	paths, errc := walkFiles(done, "data/")
+	paths, errc := walkFiles(done, os.Args[1])
 
 	waiter := make(chan struct{})
 	files := make(chan pair, 100)
