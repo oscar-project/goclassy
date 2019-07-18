@@ -23,6 +23,7 @@
 data/*
 fastText/*
 classified/*
+.vscode/*
 
 # exception to the rule
 !data/.gitkeep
