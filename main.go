@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -73,17 +74,22 @@ func main() {
 
 	waiter := make(chan struct{})
 	files := make(chan pair, 100)
+	data := make(chan string, 50)
 
 	go clasifyFiles(waiter, files)
+	go clasifyLines(data, files)
 
 	var wg sync.WaitGroup
-	maxGoroutines := 10
+	maxGoroutines := 20
 	guard := make(chan struct{}, maxGoroutines)
 	for path := range paths {
 		wg.Add(1)
 		go func(path string) {
 			guard <- struct{}{}
-			clasifyLines(path, files) // HLc
+			err := extract(path, data) // HLc
+			if err != nil {
+				log.Fatalln(err)
+			}
 			<-guard
 			wg.Done()
 		}(path)
@@ -94,10 +100,56 @@ func main() {
 		log.Fatal(err)
 	}
 	wg.Wait()
-	close(files)
+	close(data)
 	<-waiter
 }
 
+// Taken and adapted from https://github.com/ChrisCates/CommonCrawler
+// MIT License, Copyright (c) 2017 Chris Cates
+func extract(path string, data chan<- string) error {
+	//get extracted file path
+	fname := filepath.Base(path)
+	ext := filepath.Ext(fname)
+	fileName := fname[:len(fname)-len(ext)]
+	//create extruction destination
+
+	var extractedPath strings.Builder
+	extractedPath.WriteString("data/")
+	extractedPath.WriteString(fileName)
+
+	out, err := os.Create(extractedPath.String())
+	if err != nil {
+
+		return err
+	}
+	defer out.Close()
+
+	//open gzip file
+	fi, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer fi.Close()
+	//create gz reader
+	fz, err := gzip.NewReader(fi)
+	if err != nil {
+		return err
+	}
+	defer fz.Close()
+
+	//write extracted to file
+	_, err = io.Copy(out, fz)
+	if err != nil {
+		return err
+	}
+
+	data <- extractedPath.String()
+
+	return nil
+}
+
+// Taken from https://github.com/ChrisCates/CommonCrawler
+// MIT License, Copyright (c) 2017 Chris Cates
 //readWarcRecord reads one warc record from Reader
 //  warc-record  = header CRLF
 //  block CRLF CRLF
@@ -178,70 +230,87 @@ func readWarcRecord(in *bufio.Reader) (warcRecord, error) {
 	return warcRecord{warcHeaderBuilder.String(), body}, err
 }
 
-func clasifyLines(path string, files chan<- pair) {
-	in, err := os.Open(path)
-	if err != nil {
-		fmt.Println(err)
-	}
-	bufin := bufio.NewReader(in)
+func clasifyLines(data <-chan string, files chan<- pair) {
+	var wg sync.WaitGroup
+	maxGoroutines := 10
+	guard := make(chan struct{}, maxGoroutines)
+	for path := range data {
+		wg.Add(1)
+		go func(path string) {
+			guard <- struct{}{}
 
-	_, fileName := filepath.Split(path)
-
-	var tagFile strings.Builder
-	tagFile.WriteString("tmp/")
-	tagFile.WriteString(fileName)
-	tagFile.WriteString("_tag.txt")
-
-	tags, err := os.Create(tagFile.String())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var cleanFile strings.Builder
-	cleanFile.WriteString("tmp/")
-	cleanFile.WriteString(fileName)
-	cleanFile.WriteString("_clean.txt")
-
-	clean, err := os.Create(cleanFile.String())
-	if err != nil {
-		log.Fatal(err)
-	}
-	cleanWriter := bufio.NewWriter(clean)
-
-	cmd := exec.Command("fastText/fasttext", "predict-prob", "fastText/lid.176.bin", "-")
-
-	stdin, err := cmd.StdinPipe()
-	cmd.Stdout = tags
-
-	go func() {
-		defer stdin.Close()
-		for record, err := readWarcRecord(bufin); err == nil; record, err = readWarcRecord(bufin) {
-			buf := bytes.NewBuffer(record.body)
-			for line, err := buf.ReadString('\n'); err == nil; line, err = buf.ReadString('\n') {
-				if utf8.RuneCountInString(line) > 100 && utf8.Valid([]byte(line)) {
-					io.WriteString(stdin, line)
-					cleanWriter.WriteString(line)
-				}
+			in, err := os.Open(path)
+			if err != nil {
+				fmt.Println(err)
 			}
-			bufin.ReadBytes('\n')
-			bufin.ReadBytes('\n')
-		}
-		cleanWriter.Flush()
-	}()
+			bufin := bufio.NewReader(in)
 
-	err = cmd.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
+			_, fileName := filepath.Split(path)
 
-	if err := tags.Close(); err != nil {
-		log.Fatal(err)
-	}
-	if err := clean.Close(); err != nil {
-		log.Fatal(err)
-	}
+			var tagFile strings.Builder
+			tagFile.WriteString("tmp/")
+			tagFile.WriteString(fileName)
+			tagFile.WriteString("_tag.txt")
 
-	files <- pair{cleanFile.String(), tagFile.String()}
+			tags, err := os.Create(tagFile.String())
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			var cleanFile strings.Builder
+			cleanFile.WriteString("tmp/")
+			cleanFile.WriteString(fileName)
+			cleanFile.WriteString("_clean.txt")
+
+			clean, err := os.Create(cleanFile.String())
+			if err != nil {
+				log.Fatal(err)
+			}
+			cleanWriter := bufio.NewWriter(clean)
+
+			cmd := exec.Command("fastText/fasttext", "predict-prob", "fastText/lid.176.bin", "-")
+
+			stdin, err := cmd.StdinPipe()
+			cmd.Stdout = tags
+
+			go func() {
+				defer stdin.Close()
+				for record, err := readWarcRecord(bufin); err == nil; record, err = readWarcRecord(bufin) {
+					buf := bytes.NewBuffer(record.body)
+					for line, err := buf.ReadString('\n'); err == nil; line, err = buf.ReadString('\n') {
+						if utf8.RuneCountInString(line) > 100 && utf8.Valid([]byte(line)) {
+							io.WriteString(stdin, line)
+							cleanWriter.WriteString(line)
+						}
+					}
+					bufin.ReadBytes('\n')
+					bufin.ReadBytes('\n')
+				}
+				cleanWriter.Flush()
+			}()
+
+			err = cmd.Run()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if err := tags.Close(); err != nil {
+				log.Fatal(err)
+			}
+			if err := clean.Close(); err != nil {
+				log.Fatal(err)
+			}
+
+			files <- pair{cleanFile.String(), tagFile.String()}
+			if err := os.Remove(path); err != nil {
+				log.Fatal(err)
+			}
+			<-guard
+			wg.Done()
+		}(path)
+	}
+	wg.Wait()
+	close(files)
 }
 
 func clasifyFiles(waiter chan struct{}, files <-chan pair) {
@@ -265,7 +334,7 @@ func clasifyFiles(waiter chan struct{}, files <-chan pair) {
 	}
 	var label = regexp.MustCompile(`\_\_label\_\_([a-z]+)\s([0-9]*\.?[0-9]*)`)
 	var wg sync.WaitGroup
-	var waitFile sync.WaitGroup
+	//var waitFile sync.WaitGroup
 	maxGoroutines := 5
 	guard := make(chan struct{}, maxGoroutines)
 	for file := range files {
@@ -295,13 +364,13 @@ func clasifyFiles(waiter chan struct{}, files <-chan pair) {
 				if prob <= 0.8 {
 					continue
 				}
-				waitFile.Add(1)
-				go func(par, lang string) {
-					if _, err := m[lang].WriteString(par); err != nil {
-						log.Fatal(err)
-					}
-					waitFile.Done()
-				}(par, lang)
+				//waitFile.Add(1)
+				//go func(par, lang string) {
+				if _, err := m[lang].WriteString(par); err != nil {
+					log.Fatal(err)
+				}
+				//waitFile.Done()
+				//}(par, lang)
 			}
 
 			if err := tags.Close(); err != nil {
@@ -322,7 +391,7 @@ func clasifyFiles(waiter chan struct{}, files <-chan pair) {
 		}(file)
 	}
 	wg.Wait()
-	waitFile.Wait()
+	//waitFile.Wait()
 
 	for lang := range m {
 		if err := m[lang].Writer.Flush(); err != nil {
