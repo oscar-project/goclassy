@@ -302,6 +302,7 @@ func clasifyLines(data <-chan string, files chan<- pair) {
 			}
 
 			files <- pair{cleanFile.String(), tagFile.String()}
+			in.Close()
 			if err := os.Remove(path); err != nil {
 				log.Fatal(err)
 			}
