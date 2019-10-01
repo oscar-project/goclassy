@@ -353,6 +353,8 @@ func clasifyFiles(waiter chan struct{}, files <-chan pair) {
 				log.Fatal(err)
 			}
 			cleanread := bufio.NewReader(clean)
+			prev := "0"
+			var b strings.Builder
 			for par, err := cleanread.ReadString('\n'); err == nil; par, err = cleanread.ReadString('\n') {
 				tag, err := tagread.ReadString('\n')
 				if err != nil {
@@ -365,14 +367,24 @@ func clasifyFiles(waiter chan struct{}, files <-chan pair) {
 				if prob <= 0.8 {
 					continue
 				}
-				//waitFile.Add(1)
-				//go func(par, lang string) {
-				if _, err := m[lang].WriteString(par); err != nil {
-					log.Fatal(err)
+				if lang == prev || prev == "0" {
+					b.WriteString(par)
+					prev = lang
+				} else {
+					b.WriteString("\n")
+					if _, err := m[prev].WriteString(b.String()); err != nil {
+						log.Fatal(err)
+					}
+					b.Reset()
+					prev = lang
+					b.WriteString(par)
 				}
-				//waitFile.Done()
-				//}(par, lang)
 			}
+
+			if _, err := m[prev].WriteString(b.String()); err != nil {
+				log.Fatal(err)
+			}
+			b.Reset()
 
 			if err := tags.Close(); err != nil {
 				log.Fatal(err)
