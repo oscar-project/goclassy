@@ -6,7 +6,7 @@ For more info see our paper [here](http://corpora.ids-mannheim.de/CMLC7-final/CM
 
 If you want to download OSCAR you can do it [here](https://team.inria.fr/almanach/oscar/).
 
-**Note:** For the moment the downloader and uncompression part of the pipeline is not available as they are still experimental, they will be open sourced in a future release.
+**Note:** For the moment the downloader part of the pipeline is not available as it is still experimental, it will be open sourced in a future release.
 
 ## References
 
