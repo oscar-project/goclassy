@@ -25,6 +25,8 @@ fastText/*
 classified/*
 compressed/*
 .vscode/*
+fastText/*
+fastNaija/*
 
 # exception to the rule
 !data/.gitkeep
