@@ -232,7 +232,7 @@ func readWarcRecord(in *bufio.Reader) (warcRecord, error) {
 
 func clasifyLines(data <-chan string, files chan<- pair) {
 	var wg sync.WaitGroup
-	maxGoroutines := 1
+	maxGoroutines := 10
 	guard := make(chan struct{}, maxGoroutines)
 	for path := range data {
 		wg.Add(1)
@@ -268,7 +268,7 @@ func clasifyLines(data <-chan string, files chan<- pair) {
 			}
 			cleanWriter := bufio.NewWriter(clean)
 
-			cmd := exec.Command("fastText/fasttext", "predict-prob", "fastText/model_fasttex_JOB_ID201526_1b782_40k_noise1_minn2_maxn5_Add_arabizi0_quantize1.bin", "-")
+			cmd := exec.Command("fastNaija/fastNaija")
 
 			stdin, err := cmd.StdinPipe()
 			cmd.Stdout = tags

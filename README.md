@@ -11,16 +11,18 @@ If you want to download OSCAR you can do it [here](https://team.inria.fr/almanac
 ## References
 
 ```text
-@inproceedings{ortizsuarez:hal-02148693,
-  TITLE = {{Asynchronous Pipeline for Processing Huge Corpora on Medium to Low Resource Infrastructures}},
-  AUTHOR = {Ortiz Su{\'a}rez, Pedro Javier and Sagot, Beno{\^i}t and Romary, Laurent},
-  URL = {https://hal.inria.fr/hal-02148693},
-  BOOKTITLE = {{7th Workshop on the Challenges in the Management of Large Corpora (CMLC-7)}},
-  ADDRESS = {Cardiff, United Kingdom},
-  YEAR = {2019},
-  MONTH = Jul,
-  PDF = {https://hal.inria.fr/hal-02148693/file/Asynchronous_Pipeline_for_Processing_Huge_Corpora_on_Medium_to_Low_Resource_Infrastructures.pdf},
-  HAL_ID = {hal-02148693},
-  HAL_VERSION = {v1},
+@inproceedings{OrtizSuarezSagotRomary2019,
+  author    = {Pedro Javier {Ortiz Su{\´a}rez} and Beno{\^i}t Sagot and Laurent Romary},
+  title     = {Asynchronous pipelines for processing huge corpora on medium to low resource infrastructures},
+  series = {Proceedings of the Workshop on Challenges in the Management of Large Corpora (CMLC-7) 2019. Cardiff, 22nd July 2019},
+  editor    = {Piotr Bański and Adrien Barbaresi and Hanno Biber and Evelyn Breiteneder and Simon Clematide and Marc Kupietz and Harald L{\"u}ngen and Caroline Iliadi},
+  publisher = {Leibniz-Institut f{\"u}r Deutsche Sprache},
+  address   = {Mannheim},
+  doi       = {10.14618/ids-pub-9021},
+  url       = {http://nbn-resolving.de/urn:nbn:de:bsz:mh39-90215},
+  pages     = {9 -- 16},
+  year      = {2019},
+  abstract  = {Common Crawl is a considerably large, heterogeneous multilingual corpus comprised of crawled documents from the internet, surpassing 20TB of data and distributed as a set of more than 50 thousand plain text files where each contains many documents written in a wide variety of languages. Even though each document has a metadata block associated to it, this data lacks any information about the language in which each document is written, making it extremely difficult to use Common Crawl for monolingual applications. We propose a general, highly parallel, multithreaded pipeline to clean and classify Common Crawl by language; we specifically design it so that it runs efficiently on medium to low resource infrastructures where I/O speeds are the main constraint. We develop the pipeline so that it can be easily reapplied to any kind of heterogeneous corpus and so that it can be parameterised to a wide range of infrastructures. We also distribute a 6.3TB version of Common Crawl, filtered, classified by language, shuffled at line level in order to avoid copyright issues, and ready to be used for NLP applications.},
+  language  = {en}
 }
 ```
