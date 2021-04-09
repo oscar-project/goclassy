@@ -102,6 +102,13 @@ func main() {
 	wg.Wait()
 	close(data)
 	<-waiter
+
+	//fix for fasttext#482
+	//label for gsw is als in fasttext.
+	var err = os.Rename("classified/als.txt", "classified/gsw.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Taken and adapted from https://github.com/ChrisCates/CommonCrawler
