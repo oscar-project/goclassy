@@ -1,10 +1,14 @@
 # goclassy
 
+<img align="left" src="img/logo.png" width="200" height="200" /> 
+
+This is the **old** [OSCAR](https://oscar-corpus.com) pipeline, if you are looking for the upcoming pipeline please take a look at the [Ungoliant](https://github.com/oscar-corpus/ungoliant) project.
+
 An asynchronous concurrent pipeline for classifying [Common Crawl](http://commoncrawl.org/) based on [fastText's pipeline](https://github.com/facebookresearch/fastText/tree/master/crawl).
 
 For more info see our paper [here](http://corpora.ids-mannheim.de/CMLC7-final/CMLC-7_2019-Oritz_et_al.pdf).
 
-If you want to download OSCAR you can do it [here](https://team.inria.fr/almanach/oscar/).
+If you want to download OSCAR you can do it [here](https://oscar-corpus.com).
 
 **Note:** For the moment the downloader part of the pipeline is not available as it is still experimental, it will be open sourced in a future release.
 
@@ -12,7 +16,7 @@ If you want to download OSCAR you can do it [here](https://team.inria.fr/almanac
 
 ```text
 @inproceedings{OrtizSuarezSagotRomary2019,
-  author    = {Pedro Javier {Ortiz Su{\´a}rez} and Beno{\^i}t Sagot and Laurent Romary},
+  author    = {Pedro Javier {Ortiz Su{\'a}rez} and Beno{\^i}t Sagot and Laurent Romary},
   title     = {Asynchronous pipelines for processing huge corpora on medium to low resource infrastructures},
   series = {Proceedings of the Workshop on Challenges in the Management of Large Corpora (CMLC-7) 2019. Cardiff, 22nd July 2019},
   editor    = {Piotr Bański and Adrien Barbaresi and Hanno Biber and Evelyn Breiteneder and Simon Clematide and Marc Kupietz and Harald L{\"u}ngen and Caroline Iliadi},
